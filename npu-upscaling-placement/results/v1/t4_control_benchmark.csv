@@ -1,0 +1,2 @@
+provider,inference_ms,end_to_end_ms,iqr_ms
+CPUExecutionProvider,70.925,81.323,2.921

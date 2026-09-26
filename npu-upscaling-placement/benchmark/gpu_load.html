@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>GPU Load — frame rate reporter</title>
+<style>
+  body { margin:0; background:#111; color:#eee; font:13px system-ui, sans-serif; }
+  canvas { display:block; width:100vw; height:100vh; }
+  #hud { position:fixed; top:10px; left:10px; background:rgba(0,0,0,.72);
+         padding:10px 14px; border-radius:6px; line-height:1.7; }
+  #fps { font-size:30px; font-weight:600; }
+  .k { color:#9ab; }
+  #status { color:#7c7; }
+  #status.bad { color:#c77; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud">
+  <div id="fps">--</div>
+  <div><span class="k">mean 5s</span> <span id="avg">--</span></div>
+  <div><span class="k">load</span> <span id="load">--</span> iterations</div>
+  <div><span class="k">frames</span> <span id="frames">0</span></div>
+  <div id="status">connecting…</div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// A deliberately GPU-bound workload.
+//
+// The fragment shader runs a tunable loop per pixel, so the cost lands on the
+// GPU rather than on JavaScript. Iterations auto-calibrate to a target frame
+// rate well below the vsync ceiling -- if the scene ran at a capped 60fps,
+// contention from the NPU or CPU would be invisible.
+// ---------------------------------------------------------------------------
+
+const REPORT_URL = "http://127.0.0.1:8765/fps";
+const TARGET_FPS = 30;          // headroom below vsync so contention shows
+const REPORT_EVERY_MS = 500;
+
+const canvas = document.getElementById("gl");
+const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+if (!gl) {
+  document.getElementById("status").textContent = "WebGL unavailable";
+  throw new Error("no webgl");
+}
+
+function resize() {
+  canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio || 1));
+  canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio || 1));
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener("resize", resize);
+resize();
+
+const vertexSrc = `
+attribute vec2 pos;
+void main() { gl_Position = vec4(pos, 0.0, 1.0); }
+`;
+
+// Each pixel iterates a cheap but non-optimisable loop. The compiler cannot
+// fold it away because the result feeds the output colour.
+const fragmentSrc = `
+precision highp float;
+uniform float uTime;
+uniform vec2  uRes;
+uniform int   uIter;
+void main() {
+  vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 2048; i++) {
+    if (i >= uIter) break;
+    float f = float(i) * 0.013 + uTime * 0.25;
+    a += sin(uv.x * 9.0 + f) * cos(uv.y * 7.0 - f);
+    uv = abs(uv) / dot(uv, uv) - 0.72;
+    col += 0.0016 * vec3(0.55 + 0.45 * sin(a),
+                         0.55 + 0.45 * sin(a + 2.1),
+                         0.55 + 0.45 * sin(a + 4.2));
+  }
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    throw new Error(gl.getShaderInfoLog(s));
+  }
+  return s;
+}
+
+const program = gl.createProgram();
+gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSrc));
+gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSrc));
+gl.linkProgram(program);
+gl.useProgram(program);
+
+const buffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+gl.bufferData(gl.ARRAY_BUFFER,
+  new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const posLoc = gl.getAttribLocation(program, "pos");
+gl.enableVertexAttribArray(posLoc);
+gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+const uTime = gl.getUniformLocation(program, "uTime");
+const uRes  = gl.getUniformLocation(program, "uRes");
+const uIter = gl.getUniformLocation(program, "uIter");
+
+let iterations = 200;
+let frames = 0;
+let recent = [];
+let lastFrame = performance.now();
+let lastReport = performance.now();
+let calibrating = true;
+let calibrationEnd = performance.now() + 6000;
+
+function median(values) {
+  const v = [...values].sort((a, b) => a - b);
+  return v.length ? v[Math.floor(v.length / 2)] : 0;
+}
+
+function report(fps, meanFps) {
+  fetch(REPORT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      t: Date.now() / 1000,
+      fps: fps,
+      mean_fps: meanFps,
+      iterations: iterations,
+      frames: frames,
+      calibrating: calibrating,
+      width: canvas.width,
+      height: canvas.height,
+    }),
+  }).then(() => {
+    const s = document.getElementById("status");
+    s.textContent = "reporting"; s.className = "";
+  }).catch(() => {
+    const s = document.getElementById("status");
+    s.textContent = "server not reachable"; s.className = "bad";
+  });
+}
+
+function frame(now) {
+  const delta = now - lastFrame;
+  lastFrame = now;
+  frames++;
+
+  const fps = 1000 / Math.max(delta, 0.001);
+  recent.push(fps);
+  if (recent.length > 300) recent.shift();
+
+  // Auto-calibrate the workload so the scene sits near TARGET_FPS. Running at
+  // the vsync cap would hide any contention effect entirely.
+  if (calibrating && recent.length > 20) {
+    const current = median(recent.slice(-20));
+    if (now < calibrationEnd) {
+      if (current > TARGET_FPS * 1.25) iterations = Math.min(2048, Math.round(iterations * 1.25));
+      else if (current < TARGET_FPS * 0.8) iterations = Math.max(10, Math.round(iterations * 0.8));
+    } else {
+      calibrating = false;
+      recent = [];
+    }
+  }
+
+  gl.uniform1f(uTime, now * 0.001);
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.uniform1i(uIter, iterations);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  if (now - lastReport >= REPORT_EVERY_MS) {
+    const window5s = recent.slice(-Math.min(recent.length, 150));
+    const med = median(window5s);
+    document.getElementById("fps").textContent = med.toFixed(1);
+    document.getElementById("avg").textContent = med.toFixed(1);
+    document.getElementById("load").textContent = iterations;
+    document.getElementById("frames").textContent = frames;
+    report(fps, med);
+    lastReport = now;
+  }
+
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

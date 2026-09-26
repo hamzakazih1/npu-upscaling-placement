@@ -1,0 +1,20 @@
+{
+  "model": "ESPCN",
+  "scale": 2,
+  "input_shape": [
+    1,
+    3,
+    270,
+    480
+  ],
+  "opset": 13,
+  "operators": [
+    "Conv",
+    "DepthToSpace",
+    "Relu"
+  ],
+  "parameters": 26796,
+  "baseline_psnr_fp32": 27.66251697540283,
+  "bicubic_psnr": 31.106001472473146,
+  "int8_model": "espcn_x2_int8.onnx"
+}

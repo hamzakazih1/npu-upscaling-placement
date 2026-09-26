@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+
+# Large intermediates, re-creatable from the notebooks
+*.pt
+*.onnx.data
+div2k/

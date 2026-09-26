@@ -1,0 +1,9 @@
+# Verification only (no GPU needed)
+numpy>=1.26
+pandas>=2.0
+
+# Notebooks (Colab already provides these)
+# torch, torchvision, onnx, onnxruntime, onnxscript, matplotlib, pillow
+
+# On-device benchmarking, Windows on ARM only:
+#   pip install onnxruntime-qnn
