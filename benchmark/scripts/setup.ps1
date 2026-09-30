@@ -23,10 +23,10 @@ python -m pip install --upgrade pip
 Write-Host "`n=== Packages ===" -ForegroundColor Cyan
 pip install numpy pandas matplotlib onnx
 
-# QNN reaches the Hexagon NPU; DirectML reaches the Adreno GPU.
-# Install QNN first: it brings its own onnxruntime build.
+# QNN reaches the Hexagon NPU and brings its own onnxruntime build.
+# Do NOT also install onnxruntime-directml: there is no ARM64 DirectML, and
+# the package overwrites the same onnxruntime module, removing QNN.
 pip install onnxruntime-qnn
-pip install onnxruntime-directml
 
 Write-Host "`n=== Available providers ===" -ForegroundColor Cyan
 python -c "import onnxruntime as ort; print(ort.__version__); [print(' ', p) for p in ort.get_available_providers()]"

@@ -1,0 +1,33 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # No hosted runner has a Hexagon NPU, so these run the CPU path and
+        # the NPU-refusal path. windows-11-arm checks the ARM64 install, which
+        # pulls onnxruntime-qnn; the NPU-only tests skip themselves there.
+        os: [ubuntu-latest, windows-latest, windows-11-arm]
+        python: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    # onnxruntime-qnn wheel availability on hosted ARM64 runners varies.
+    continue-on-error: ${{ matrix.os == 'windows-11-arm' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: pip install opencv-python-headless
+        if: matrix.os != 'windows-11-arm'
+      - run: npu-upscale doctor
+        continue-on-error: true
+      - run: python -m pytest -v
+      - run: pip install pandas && python src/verify_results.py
+        if: matrix.os == 'ubuntu-latest'

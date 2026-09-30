@@ -10,3 +10,9 @@ Thumbs.db
 *.pt
 *.onnx.data
 div2k/
+
+# Packaging
+*.egg-info/
+build/
+dist/
+.pytest_cache/

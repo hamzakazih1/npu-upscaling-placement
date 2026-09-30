@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "npu-upscale"
+version = "0.1.0"
+description = "Neural x2 upscaling on the Hexagon NPU of Snapdragon X-series laptops, with verified placement"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10",
+    "onnx>=1.16",
+    # Windows on Snapdragon gets the QNN build, which reaches the Hexagon NPU
+    # and brings its own onnxruntime. Everywhere else: the plain CPU runtime.
+    "onnxruntime-qnn; sys_platform == 'win32' and platform_machine == 'ARM64'",
+    "onnxruntime>=1.18; sys_platform != 'win32' or platform_machine != 'ARM64'",
+]
+
+[project.optional-dependencies]
+video = ["opencv-python>=4.8"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+npu-upscale = "npu_upscale.cli:main"
+
+[tool.setuptools]
+packages = ["npu_upscale"]
+
+[tool.setuptools.package-data]
+npu_upscale = ["models/*.onnx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "npu_upscale/chips.py"]
+addopts = "--doctest-modules"

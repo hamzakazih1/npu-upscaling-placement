@@ -4,6 +4,61 @@ Measuring what happens to a renderer's frame rate when a neural upscaler is move
 
 MSc Artificial Intelligence dissertation, Brunel University London (CS5500).
 
+## Use it: `npu-upscale`
+
+The study's conclusion is that on a Snapdragon X laptop the NPU is the only processor that can run a neural upscaler inside a frame. `npu_upscale/` turns that into a tool you can install. It runs on the whole Snapdragon X family, and it refuses to say "NPU" unless the work actually ran there.
+
+| Chip | Model numbers | NPU |
+|---|---|---|
+| Snapdragon X | X1-26-100 | Hexagon, 45 TOPS |
+| Snapdragon X Plus | X1P-42-100, X1P-46-100, X1P-64-100, X1P-66-100 … | Hexagon, 45 TOPS |
+| Snapdragon X Elite | X1E-78-100, X1E-80-100, X1E-84-100, X1E-00-1DE … | Hexagon, 45 TOPS |
+| Snapdragon X2 Plus / X2 Elite | X2P-…, X2E-… | Hexagon gen 2, 80 TOPS |
+
+Only the X Plus (X1P-42-100) has actually been measured. The rest share the QNN HTP backend, and `npu-upscale doctor` verifies each machine on its own.
+
+**Install** (Windows 11 on ARM, **ARM64** Python 3.10 or newer):
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\install.ps1            # venv + package + onnxruntime-qnn, then runs doctor
+```
+
+or by hand: `pip install -e ".[video]"`. `onnxruntime-qnn` is installed automatically on ARM64 Windows. Don't install `onnxruntime` or `onnxruntime-directml` next to it, because they replace the same module.
+
+**Use:**
+
+```powershell
+npu-upscale doctor                            # chip, QNN, per-node placement, latency
+npu-upscale image photo.png -o photo_x2.png   # or a folder: npu-upscale image .\shots -o .\big
+npu-upscale video clip.mp4 -o clip_x2.mp4     # audio is kept if ffmpeg is on PATH
+npu-upscale bench --native                    # latency vs 30/60 fps budgets at 540p/720p/1080p
+```
+
+```python
+from npu_upscale import Upscaler
+
+up = Upscaler(device="npu", frame_size=(960, 540))   # raises instead of silently using the CPU
+print(up.info.describe())    # Hexagon NPU via QNN on Snapdragon X Plus (X1P-42-100) ...
+frame_x2 = up.upscale(frame) # HxWx3 uint8 RGB -> 2Hx2Wx3
+for out in up.stream(frames): ...                    # ordered, pipelined
+```
+
+**How each obstacle is handled:**
+
+| Obstacle from the study | What `npu_upscale` does |
+|---|---|
+| 1. QNN plugin must be registered | Registers it automatically. Also supports older builds where QNN is a built-in EP |
+| 2. `providers=[...]` silently gives a CPU session | Selects by device through `add_provider_for_devices()`, then checks the session's providers |
+| 3. QNN appears once for the NPU and once for the GPU | Filters on `OrtHardwareDeviceType.NPU` |
+| 4. fp32 runs entirely on the CPU and reports success | Sets `session.disable_cpu_ep_fallback`, so a model that won't run fully on the NPU fails to load. `doctor` reads ONNX Runtime's own profile to confirm per-node placement |
+| 5. No GPU inference path | Doesn't use one. The CPU is an explicit, announced fallback (`device="auto"`) |
+| x64 Python under emulation | Detected, with a message telling you to install ARM64 Python |
+| Static shapes only | Any frame size works through overlapping tiles that are bit-exact with a single full pass (tested). `frame_size=` re-declares the fully convolutional model at the exact frame size, so there is no tiling at all |
+| Slow first load | The compiled QNN context is cached per chip model and runtime version |
+
+The NPU gets the INT8 corrected model (`v2`, +0.89 dB over bicubic). The CPU fallback gets its fp32 version. Use `performance_mode="sustained_high_performance"` for long runs on fanless machines (it is the default for `video`).
+
 ---
 
 ## The question
@@ -98,6 +153,14 @@ It recomputes every figure in this README from the CSVs in `results/`, including
 ## Layout
 
 ```
+├── npu_upscale/                    installable NPU upscaler (CLI: npu-upscale)
+│   ├── chips.py                    Snapdragon X / X Plus / X Elite / X2 detection
+│   ├── runtime.py                  QNN sessions: strict placement, context cache
+│   ├── tiling.py                   any frame size on a static-shape model
+│   ├── upscaler.py, video.py, cli.py
+│   └── models/                     bundled v2 model, INT8 (NPU) and fp32 (CPU)
+├── tests/                          pytest; NPU tests run only on NPU hardware
+├── install.ps1                     one-step Windows-on-ARM install
 ├── notebooks/
 │   ├── 01_first_model.ipynb        EDA, first model, INT8 export (Colab)
 │   └── 02_corrected_model.ipynb    corrected model with anchor residual
