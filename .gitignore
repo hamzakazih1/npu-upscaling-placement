@@ -10,3 +10,8 @@ Thumbs.db
 *.pt
 *.onnx.data
 div2k/
+
+# PadMIDI build outputs
+padmidi/packaging/build/
+padmidi/build/
+padmidi/dist/

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "padmidi"
+version = "0.1.0"
+description = "Turn a laptop trackpad into an expressive MIDI controller (Windows and macOS)"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "PySide6-Essentials>=6.7,<7",
+    "python-rtmidi>=1.5.8,<2",
+    "pynput>=1.7.7,<2",
+]
+
+[project.scripts]
+padmidi = "padmidi.app:main"
+
+[tool.setuptools.packages.find]
+include = ["padmidi*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

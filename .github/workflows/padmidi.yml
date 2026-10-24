@@ -1,0 +1,87 @@
+name: PadMIDI builds
+
+on:
+  push:
+    paths:
+      - "padmidi/**"
+      - ".github/workflows/padmidi.yml"
+    tags:
+      - "padmidi-v*"
+  pull_request:
+    paths:
+      - "padmidi/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: PadMIDI-Windows
+          - os: macos-latest
+            artifact: PadMIDI-macOS
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: padmidi
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pillow pytest
+
+      - name: Unit tests
+        run: python -m pytest -q
+
+      - name: Native modules load
+        run: python -c "import padmidi.touch.windows" ; python -c "import rtmidi; print(rtmidi.MidiOut().get_ports())"
+        if: runner.os == 'Windows'
+
+      - name: Native modules load
+        run: |
+          python -c "import padmidi.touch.macos as m; import ctypes; assert ctypes.sizeof(m.MTFinger) == 96"
+          python -c "import rtmidi; o = rtmidi.MidiOut(); o.open_virtual_port('PadMIDI CI'); print('virtual port ok')"
+        if: runner.os == 'macOS'
+
+      - name: Icons
+        run: python packaging/make_icons.py packaging/build
+
+      - name: Build
+        run: pyinstaller --noconfirm packaging/padmidi.spec
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/PadMIDI -DestinationPath ${{ matrix.artifact }}.zip
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/PadMIDI.app ${{ matrix.artifact }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: padmidi/${{ matrix.artifact }}.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/padmidi-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
