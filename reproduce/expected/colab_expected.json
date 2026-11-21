@@ -1,0 +1,20 @@
+{
+  "_about": "Expected outcome of reproduce/colab/03_reproducible_model.ipynb. 'exact' values follow from the configuration. 'tolerance' values come from the dissertation's v2 run (results/v2), which used the same model, data and hyper-parameters but unseeded patch sampling, so a seeded run lands near, not on, them. Once a run of this notebook is committed as colab_reference.json, later runs are also checked against it exactly.",
+  "exact": {
+    "model.trainable_parameters": 35124,
+    "config.train_images": 120,
+    "config.epochs": 8,
+    "config.input_shape": [1, 3, 270, 480]
+  },
+  "npu_safe_operators": ["Add", "Clip", "Constant", "Conv", "DepthToSpace", "Relu"],
+  "tolerance": {
+    "test.psnr_bicubic": {"value": 32.0878, "tol": 0.005, "why": "same images and same protocol, so bicubic must match"},
+    "test.psnr_fp32": {"value": 33.2503, "tol": 0.30, "why": "v2 result; differs only by which random patches were drawn"},
+    "test.gain_fp32.mean": {"value": 1.1625, "tol": 0.30, "why": "v2 result"},
+    "test.int8_cost.mean": {"value": -0.2724, "tol": 0.25, "why": "v2 result"}
+  },
+  "minimum": {
+    "test.int8_beats_bicubic": {"value": 8},
+    "test.gain_int8.mean": {"value": 0.0}
+  }
+}

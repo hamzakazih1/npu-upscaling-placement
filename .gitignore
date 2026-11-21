@@ -10,3 +10,8 @@ Thumbs.db
 *.pt
 *.onnx.data
 div2k/
+
+# Reproducibility package: generated outputs (commit a run deliberately with git add -f)
+reproduce/results/
+reproduce/laptop/pip-freeze.txt
+.venv-repro/
