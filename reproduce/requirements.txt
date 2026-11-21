@@ -1,0 +1,7 @@
+# Analysis and laptop runner. The Colab notebook pins its own versions.
+numpy>=1.26
+pandas>=2.0
+scipy>=1.11
+matplotlib>=3.8
+# Laptop only, installed separately by setup_laptop.ps1:
+#   onnxruntime-qnn

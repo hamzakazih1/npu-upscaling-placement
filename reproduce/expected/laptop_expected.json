@@ -1,0 +1,19 @@
+{
+  "_about": "Expected outcome of reproduce/laptop/run_experiment_v2.py --preset dissertation on a Snapdragon X Plus (X1P42100) laptop with a 120 Hz display. Values come from re-analysing the dissertation's own raw data (dissertation_reanalysis.json). Hardware timing never repeats exactly, so each value has a tolerance; the conclusion (NPU equivalent to baseline within 1%) is the part that must reproduce.",
+  "setup": {"iterations": 700, "canvas": "1189x966", "display_hz": 120},
+  "min_valid_runs_per_condition": 8,
+  "throughput": {
+    "baseline_fps": 21.316,
+    "baseline_rel_tol": 0.03,
+    "_note": "Absolute throughput depends on the display refresh rate, driver and browser version; it is only checked when the shader load and canvas match the dissertation."
+  },
+  "equivalence": {
+    "npu": {"equivalent": true, "required": true, "dissertation_ci90": "0.9992-1.0066"},
+    "cpu": {"equivalent": false, "required": false, "dissertation_ci90": "0.9984-1.0119 (inconclusive with 3 runs; 10 runs may settle it either way)"}
+  },
+  "latency_ms": {
+    "npu": {"value": 1.667, "rel_tol": 0.25},
+    "cpu": {"value": 109.241, "rel_tol": 0.30},
+    "cpu_over_npu_range": [40, 100]
+  }
+}

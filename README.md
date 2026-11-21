@@ -16,6 +16,14 @@ So: does moving the upscaler to that idle silicon give the GPU its budget back?
 
 ---
 
+> **Re-analysis update.** The frame-rate figures below use the page's rolling
+> *median* of per-frame fps, which snaps to vsync steps. Measured as frames per
+> second of elapsed time, from the same raw data, the NPU condition is +0.29%
+> against baseline (95% CI −0.28% to +0.86%) and equivalent within ±1%
+> (TOST p = 0.015). The 2.6% cost does not hold up. The corrected benchmark,
+> a deterministic training notebook and an automatic checker are in
+> [`reproduce/`](reproduce/README.md).
+
 ## Results
 
 ### The renderer does not care where the upscaler runs
@@ -92,6 +100,8 @@ python src/verify_results.py
 ```
 
 It recomputes every figure in this README from the CSVs in `results/`, including the vsync check and the per-image quantization analysis.
+
+To rerun the whole project and check it reproduces (re-analysis, Colab training, and the Snapdragon X measurement), see [`reproduce/README.md`](reproduce/README.md).
 
 ---
 
